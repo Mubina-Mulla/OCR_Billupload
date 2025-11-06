@@ -4,7 +4,7 @@ import './Sidebar.css';
 const Sidebar = ({ currentPath, onNavigate, collapsed, isMobile, onClose }) => {
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { path: '/customers', label: 'Customer Management', icon: '👥' },
+    { path: '/customers', label: 'Customers', icon: '👥' },
     { path: '/services', label: 'Service', icon: '🔧' },
     { path: '/tech', label: 'Technician', icon: '👨‍💻' },
     { path: '/tickets', label: 'Tickets', icon: '🎫' }
