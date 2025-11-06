@@ -1,0 +1,35 @@
+# Node modules
+node_modules/
+
+# Build and cache directories
+.cache/
+build/
+dist/
+
+# Dependency directories
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# Temporary files
+*.log
+*.tmp
+
+# Coverage and test outputs
+coverage/

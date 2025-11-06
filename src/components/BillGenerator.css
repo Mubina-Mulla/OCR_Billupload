@@ -1,0 +1,105 @@
+/* src/components/BillGenerator.css */
+.bill-wrapper {
+  padding: 16px;
+}
+
+.bill {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  padding: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.bill-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px dashed #ddd;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.bill-header h2 {
+  margin: 0 0 4px;
+}
+
+.bill-customer div {
+  margin: 2px 0;
+}
+
+.bill-meta div {
+  text-align: right;
+}
+
+.bill-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.bill-table th,
+.bill-table td {
+  border: 1px solid #eee;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.bill-table thead th {
+  background: #fafafa;
+}
+
+.bill-table tfoot td {
+  font-weight: 600;
+}
+
+.bill-table .right {
+  text-align: right;
+}
+
+.bill-table .total {
+  color: #111;
+  font-size: 16px;
+}
+
+.bill-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.bill-actions .btn {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+@media print {
+  /* Hide everything by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Show only the bill and its children */
+  .bill, .bill * {
+    visibility: visible !important;
+  }
+
+  /* Remove actions and shadows for print */
+  .bill-actions { display: none !important; }
+  .bill {
+    box-shadow: none !important;
+    border: none !important;
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0 !important;
+    padding: 0.5in; /* printable margin */
+  }
+}
