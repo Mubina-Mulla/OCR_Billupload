@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ref, onValue, remove, update } from 'firebase/database';
-import { database } from '../firebase/config';
+import { onSnapshot, deleteDoc, updateDoc } from 'firebase/firestore';
+import { getCollectionRef, getDocRef } from '../firebase/config';
 import AddService from './AddService';
 import ConfirmDialog from './ConfirmDialog';
 import Notification from './Notification';
@@ -26,38 +26,32 @@ const ServiceCenter = () => {
   const selectedService = serviceId ? services.find(s => s.id === serviceId) : null;
 
   useEffect(() => {
-    const servicesRef = ref(database, 'services');
-    onValue(servicesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const servicesArray = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setServices(servicesArray);
-      } else {
-        setServices([]);
-      }
+    const servicesRef = getCollectionRef('services');
+    const unsubscribeServices = onSnapshot(servicesRef, (snapshot) => {
+      const servicesArray = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setServices(servicesArray);
     });
 
     // Fetch tickets
-    const ticketsRef = ref(database, 'tickets');
-    onValue(ticketsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const ticketsArray = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
-        setTickets(ticketsArray);
-      } else {
-        setTickets([]);
-      }
+    const ticketsRef = getCollectionRef('tickets');
+    const unsubscribeTickets = onSnapshot(ticketsRef, (snapshot) => {
+      const ticketsArray = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTickets(ticketsArray);
     });
 
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      unsubscribeServices();
+      unsubscribeTickets();
+    };
   }, []);
 
   const handleDelete = (serviceId, serviceName) => {
@@ -67,7 +61,8 @@ const ServiceCenter = () => {
 
   const confirmDelete = async () => {
     try {
-      await remove(ref(database, `services/${confirmDialog.id}`));
+      const serviceRef = getDocRef('services', confirmDialog.id);
+      await deleteDoc(serviceRef);
       showNotification('Service center deleted successfully!', 'success');
     } catch (error) {
       showNotification('Error deleting service center. Please try again.', 'error');
@@ -184,10 +179,6 @@ const ServiceCenter = () => {
                       <div className="info-row">
                         <span className="info-label">Product</span>
                         <span className="info-value">{ticket.productName}</span>
-                      </div>
-                      <div className="info-row">
-                        <span className="info-label">Serial No</span>
-                        <span className="info-value">{ticket.serialNumber || '-'}</span>
                       </div>
                       {ticket.issueType && (
                         <div className="info-row">

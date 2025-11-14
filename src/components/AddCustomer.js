@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ref, push, onValue, update, remove } from 'firebase/database';
-import { database } from '../firebase/config';
+import { addDoc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getCollectionRef, getDocRef } from '../firebase/config';
 import AddProduct from './AddProduct';
 import AddTicket from './AddTicket';
 import BillGenerator from './BillGenerator';
@@ -98,16 +98,13 @@ const AddCustomer = ({ onBack }) => {
 
   // Fetch products (for existing customers)
   useEffect(() => {
-    const productsRef = ref(database, 'products');
-    const unsubscribe = onValue(productsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const productsArray = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setAllProducts(productsArray);
-      } else setAllProducts([]);
+    const productsRef = getCollectionRef('products');
+    const unsubscribe = onSnapshot(productsRef, (snapshot) => {
+      const productsArray = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAllProducts(productsArray);
     });
 
     return () => unsubscribe();
@@ -264,12 +261,12 @@ const AddCustomer = ({ onBack }) => {
         productCount: tempProducts.length
       };
       
-      const customersRef = ref(database, 'customers');
-      const newCustomerRef = await push(customersRef, customerData);
-      const savedCustomer = { id: newCustomerRef.key, ...customerData };
+      const customersRef = getCollectionRef('customers');
+      const newCustomerRef = await addDoc(customersRef, customerData);
+      const savedCustomer = { id: newCustomerRef.id, ...customerData };
       
       if (tempProducts.length > 0) {
-        const productsRef = ref(database, 'products');
+        const productsRef = getCollectionRef('products');
         const productPromises = tempProducts
           .filter(product => {
             // Only save products that don't have a Firebase ID yet
@@ -278,8 +275,8 @@ const AddCustomer = ({ onBack }) => {
             if (hasFirebaseId) {
               console.log('⏭️ Skipping product - already saved to Firebase:', product.name);
               // Update the existing product with customer info
-              const productRef = ref(database, `products/${product.id}`);
-              update(productRef, {
+              const productRef = getDocRef('products', product.id);
+              updateDoc(productRef, {
                 customerId: savedCustomer.id,
                 customerName: savedCustomer.name
               });
@@ -320,7 +317,7 @@ const AddCustomer = ({ onBack }) => {
             });
             
             console.log('💾 Saving clean product data:', productData);
-            return push(productsRef, productData);
+            return addDoc(productsRef, productData);
           });
         
         await Promise.all(productPromises);
@@ -437,8 +434,8 @@ const AddCustomer = ({ onBack }) => {
       setEditingProduct(null);
     } else {
       try {
-        const productRef = ref(database, `products/${editingProduct.id}`);
-        await update(productRef, {
+        const productRef = getDocRef('products', editingProduct.id);
+        await updateDoc(productRef, {
           ...updatedProductData,
           updatedAt: new Date().toISOString()
         });
@@ -458,8 +455,8 @@ const AddCustomer = ({ onBack }) => {
         setTempProducts(prev => prev.filter(product => product.tempId !== productId));
         showNotification('Product removed successfully!', 'success');
       } else {
-        const productRef = ref(database, `products/${productId}`);
-        remove(productRef)
+        const productRef = getDocRef('products', productId);
+        deleteDoc(productRef)
           .then(() => {
             showNotification('Product deleted successfully!', 'success');
           })
@@ -794,9 +791,6 @@ const AddCustomer = ({ onBack }) => {
                         <p><strong>Company Name:</strong> {product.companyName || 'N/A'}</p>
                         <p><strong>Product Name:</strong> {product.name || 'N/A'}</p>
                         <p><strong>Serial Number:</strong> {product.serialNumber || product.serialNo || 'N/A'}</p>
-                        <p><strong>Stock Quantity:</strong> {product.stock || product.quantity || product.qty || 1}</p>
-                        <p><strong>Price:</strong> ₹{parseFloat(product.price || 0).toFixed(2)}</p>
-                        <p><strong>Amount:</strong> ₹{parseFloat(product.amount || 0).toFixed(2)}</p>
                         {product.gst && <p><strong>GST:</strong> {product.gst}%</p>}
                       </div>
                       <div className="product-actions-footer">

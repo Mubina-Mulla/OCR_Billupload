@@ -10,10 +10,14 @@ const Sidebar = ({ currentPath, onNavigate, collapsed, isMobile, onClose }) => {
     { path: '/tickets', label: 'Tickets', icon: '🎫' }
   ];
 
-  const handleItemClick = (path) => {
-    onNavigate(path);
-    if (isMobile && onClose) {
-      onClose();
+  const handleItemClick = (e, path) => {
+    // Only prevent default on left-click (button 0)
+    if (e.button === 0) {
+      e.preventDefault();
+      onNavigate(path);
+      if (isMobile && onClose) {
+        onClose();
+      }
     }
   };
 
@@ -32,14 +36,15 @@ const Sidebar = ({ currentPath, onNavigate, collapsed, isMobile, onClose }) => {
         <ul className="sidebar-menu">
           {menuItems.map(item => (
             <li key={item.path}>
-              <button
+              <a
+                href={item.path}
                 className={currentPath === item.path ? 'active' : ''}
-                onClick={() => handleItemClick(item.path)}
+                onClick={(e) => handleItemClick(e, item.path)}
                 title={collapsed ? item.label : ''}
               >
                 <span className="icon">{item.icon}</span>
                 {!collapsed && <span className="label">{item.label}</span>}
-              </button>
+              </a>
             </li>
           ))}
         </ul>

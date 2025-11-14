@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from 'react-router-dom';
-import { db } from "../../firebase/config";
-import { ref, onValue, remove } from "firebase/database";
+import { getCollectionRef, getDocRef, db } from "../../firebase/config";
+import { onSnapshot, deleteDoc, collection, getDocs } from "firebase/firestore";
 import TechForm from "./TechForm";
 import ConfirmDialog from "../ConfirmDialog";
 import Notification from "../Notification";
 import useNotification from "../../hooks/useNotification";
 import CustomerHistory from "./CustomerHistory";
-import TechnicianLogin from "./TechnicianLogin";
 import "./TechManagement.css";
 
 const Technicians = () => {
@@ -20,68 +19,88 @@ const Technicians = () => {
   const [showAddTech, setShowAddTech] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All Status");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, id: null, name: '' });
   const { notification, showNotification, hideNotification } = useNotification();
   const [showHistory, setShowHistory] = useState(false);
   const [customerTransactions, setCustomerTransactions] = useState([]);
-  const [showLogin, setShowLogin] = useState(false);
-  const [loginTech, setLoginTech] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   
   // Get selected tech from URL
   const selectedTech = techId ? technicians.find(t => t.id === techId) : null;
 
+
   useEffect(() => {
-    const techRef = ref(db, "technicians");
-    onValue(techRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const techArray = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
-        setTechnicians(techArray);
-        setFilteredTechs(techArray);
-      } else {
-        setTechnicians([]);
-        setFilteredTechs([]);
-      }
+    const techRef = getCollectionRef("technicians");
+    const unsubscribeTech = onSnapshot(techRef, (snapshot) => {
+      const techArray = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setTechnicians(techArray);
+      setFilteredTechs(techArray);
     });
 
-    // Fetch tickets
-    const ticketsRef = ref(db, "tickets");
-    onValue(ticketsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const ticketsArray = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
-        setTickets(ticketsArray);
-      } else {
+    // Fetch tickets from all users (for TechManagement to see all tickets)
+    const fetchAllUserTickets = async () => {
+      try {
+        const usersRef = getCollectionRef('users');
+        const usersSnapshot = await getDocs(usersRef);
+        const allTickets = [];
+        
+        for (const userDoc of usersSnapshot.docs) {
+          const userTicketsRef = collection(db, 'mainData', 'Billuload', 'users', userDoc.id, 'tickets');
+          const ticketsSnapshot = await getDocs(userTicketsRef);
+          
+          ticketsSnapshot.docs.forEach(ticketDoc => {
+            allTickets.push({
+              id: ticketDoc.id,
+              userId: userDoc.id,
+              userEmail: userDoc.data().email,
+              userName: userDoc.data().name,
+              ...ticketDoc.data()
+            });
+          });
+        }
+        
+        setTickets(allTickets);
+      } catch (error) {
+        console.error('Error fetching user tickets:', error);
         setTickets([]);
       }
-    });
+    };
+    
+    // Initial fetch
+    fetchAllUserTickets();
+    
+    // Set up interval to refresh tickets every 30 seconds
+    const ticketInterval = setInterval(fetchAllUserTickets, 30000);
+    
+    const unsubscribeTickets = () => {
+      clearInterval(ticketInterval);
+    };
 
     // Fetch customer transactions
-    const transactionsRef = ref(db, "customerTransactions");
-    onValue(transactionsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const transactionsArray = Object.keys(data).map((key) => ({
-          id: key,
-          ...data[key],
-        }));
-        setCustomerTransactions(transactionsArray);
-      } else {
-        setCustomerTransactions([]);
-      }
+    const transactionsRef = getCollectionRef("customerTransactions");
+    const unsubscribeTransactions = onSnapshot(transactionsRef, (snapshot) => {
+      const transactionsArray = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setCustomerTransactions(transactionsArray);
     });
 
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      unsubscribeTech();
+      unsubscribeTickets();
+      unsubscribeTransactions();
+    };
   }, []);
 
   // 🔍 Search Filter
@@ -94,7 +113,6 @@ const Technicians = () => {
         (tech) =>
           tech.name?.toLowerCase().includes(lower) ||
           tech.phone?.toLowerCase().includes(lower) ||
-          tech.email?.toLowerCase().includes(lower) ||
           (Array.isArray(tech.skills) 
             ? tech.skills.some(skill => skill?.toLowerCase().includes(lower))
             : tech.skills?.toLowerCase().includes(lower)) ||
@@ -116,7 +134,8 @@ const Technicians = () => {
 
   const confirmDelete = async () => {
     try {
-      await remove(ref(db, `technicians/${confirmDialog.id}`));
+      const techRef = getDocRef("technicians", confirmDialog.id);
+      await deleteDoc(techRef);
       showNotification("Technician deleted successfully!", "success");
     } catch (error) {
       showNotification("Error deleting technician. Please try again.", "error");
@@ -135,21 +154,7 @@ const Technicians = () => {
   };
 
   const handleTechClick = (tech) => {
-    setLoginTech(tech);
-    setShowLogin(true);
-    setIsAuthenticated(false);
-  };
-
-  const handleLoginSuccess = () => {
-    setShowLogin(false);
-    setIsAuthenticated(true);
-    navigate(`/tech/${loginTech.id}`);
-  };
-
-  const handleLoginCancel = () => {
-    setShowLogin(false);
-    setLoginTech(null);
-    setIsAuthenticated(false);
+    navigate(`/tech/${tech.id}`);
   };
 
   const handleBackToTechList = () => {
@@ -181,22 +186,27 @@ const Technicians = () => {
     );
 
     // Calculate total amount from all tickets
-    // In Store: Add TOTAL AMT (Service Amount - Commission)
-    // Third Party: Add only COMMISSION
-    const totalTicketAmount = techTickets.reduce((sum, ticket) => {
-      const serviceAmount = parseFloat(ticket.serviceAmount) || 0;
-      const commissionAmount = parseFloat(ticket.commissionAmount) || 0;
-      
+    // Wallet = In Store Service - In Store Commission - All Third Party Commissions
+    const inStoreTotal = techTickets.reduce((sum, ticket) => {
       if (ticket.category === "In Store") {
-        // For In Store: Add TOTAL AMT (Service - Commission)
-        const totalAmt = serviceAmount - commissionAmount;
-        return sum + totalAmt;
-      } else if (ticket.category === "Third Party") {
-        // For Third Party: Add only COMMISSION
+        const serviceAmount = parseFloat(ticket.serviceAmount) || 0;
+        const commissionAmount = parseFloat(ticket.commissionAmount) || 0;
+        // Add (Service - Commission) for In Store
+        return sum + (serviceAmount - commissionAmount);
+      }
+      return sum;
+    }, 0);
+
+    const thirdPartyCommissions = techTickets.reduce((sum, ticket) => {
+      if (ticket.category === "Third Party") {
+        const commissionAmount = parseFloat(ticket.commissionAmount) || 0;
         return sum + commissionAmount;
       }
       return sum;
     }, 0);
+
+    // Final wallet = In Store Total - Third Party Commissions
+    const totalTicketAmount = inStoreTotal - thirdPartyCommissions;
 
     // Calculate customer balance (total from tickets + credits - debits)
     // If no tickets, balance should be 0 regardless of transactions
@@ -209,10 +219,51 @@ const Technicians = () => {
       customerBalance = totalTicketAmount + credits - debits;
     }
 
-    // Apply category filter
-    if (categoryFilter !== "All") {
-      techTickets = techTickets.filter(ticket => ticket.category === categoryFilter);
-    }
+    // Filter tickets by date range
+    const filterTicketsByDate = (ticket) => {
+      // If using single date filter (legacy)
+      if (selectedDate && !startDate && !endDate) {
+        const ticketDate = new Date(ticket.createdAt);
+        const filterDate = new Date(selectedDate);
+        return ticketDate.getFullYear() === filterDate.getFullYear() &&
+               ticketDate.getMonth() === filterDate.getMonth() &&
+               ticketDate.getDate() === filterDate.getDate();
+      }
+      
+      // If using start/end date range filter
+      if (startDate || endDate) {
+        const ticketStartDate = new Date(ticket.createdAt);
+        const ticketEndDate = ticket.endDate ? new Date(ticket.endDate) : ticketStartDate;
+        
+        let matchesRange = true;
+        
+        // Check if ticket starts within or after the filter start date
+        if (startDate) {
+          const filterStartDate = new Date(startDate);
+          matchesRange = matchesRange && (ticketStartDate >= filterStartDate || ticketEndDate >= filterStartDate);
+        }
+        
+        // Check if ticket ends within or before the filter end date
+        if (endDate) {
+          const filterEndDate = new Date(endDate);
+          filterEndDate.setHours(23, 59, 59, 999); // Include the entire end date
+          matchesRange = matchesRange && (ticketStartDate <= filterEndDate || ticketEndDate <= filterEndDate);
+        }
+        
+        return matchesRange;
+      }
+      
+      // No date filters applied
+      return true;
+    };
+
+    // Apply all filters
+    techTickets = techTickets.filter(ticket => {
+      const categoryMatch = categoryFilter === "All" || ticket.category === categoryFilter;
+      const statusMatch = statusFilter === "All Status" || ticket.status === statusFilter;
+      const dateMatch = filterTicketsByDate(ticket);
+      return categoryMatch && statusMatch && dateMatch;
+    });
 
     return (
       <div className="service-center">
@@ -225,10 +276,6 @@ const Technicians = () => {
 
         <div className="tech-info-card">
           <div className="tech-info-grid">
-            <div className="tech-info-item">
-              <span className="tech-info-label">EMAIL:</span>
-              <span className="tech-info-value">{selectedTech.email}</span>
-            </div>
             <div className="tech-info-item">
               <span className="tech-info-label">PHONE:</span>
               <span className="tech-info-value">{selectedTech.phone}</span>
@@ -260,27 +307,93 @@ const Technicians = () => {
         </div>
 
         <div className="tickets-section">
-          <div className="tickets-header-with-filters">
-            <h2>Assigned Tickets ({techTickets.length})</h2>
-            <div className="filter-buttons">
-              <button 
-                className={`filter-btn ${categoryFilter === "All" ? "active" : ""}`}
-                onClick={() => setCategoryFilter("All")}
-              >
-                All
-              </button>
-              <button 
-                className={`filter-btn ${categoryFilter === "Third Party" ? "active" : ""}`}
-                onClick={() => setCategoryFilter("Third Party")}
-              >
-                Third Party
-              </button>
-              <button 
-                className={`filter-btn ${categoryFilter === "In Store" ? "active" : ""}`}
-                onClick={() => setCategoryFilter("In Store")}
-              >
-                In Store
-              </button>
+          <div className="tickets-header">
+            <div className="header-main">
+              <h2>Assigned Tickets ({techTickets.length})</h2>
+            </div>
+            
+            <div className="filter-buttons-container">
+              <div className="filter-buttons">
+                <button 
+                  className={`filter-btn ${categoryFilter === "All" ? "active" : ""}`}
+                  onClick={() => setCategoryFilter("All")}
+                >
+                  All
+                </button>
+                <button 
+                  className={`filter-btn ${categoryFilter === "Third Party" ? "active" : ""}`}
+                  onClick={() => setCategoryFilter("Third Party")}
+                >
+                  Third Party
+                </button>
+                <button 
+                  className={`filter-btn ${categoryFilter === "In Store" ? "active" : ""}`}
+                  onClick={() => setCategoryFilter("In Store")}
+                >
+                  In Store
+                </button>
+              </div>
+              
+              <div className="filter-controls-right">
+                <div className="status-filter">
+                  <label htmlFor="statusFilter" className="filter-label">
+                    Status:
+                  </label>
+                  <select
+                    id="statusFilter"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="All Status">All Status</option>
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Resolved">Resolved</option>
+                  </select>
+                </div>
+
+                <div className="date-range-filter-section">
+                  <div className="date-filter-group">
+                    <label htmlFor="startDateFilter" className="date-filter-label">
+                      Start Date:
+                    </label>
+                    <input
+                      type="date"
+                      id="startDateFilter"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="date-filter-input"
+                    />
+                  </div>
+                  
+                  <div className="date-filter-group">
+                    <label htmlFor="endDateFilter" className="date-filter-label">
+                      End Date:
+                    </label>
+                    <input
+                      type="date"
+                      id="endDateFilter"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      min={startDate}
+                      className="date-filter-input"
+                    />
+                  </div>
+                  
+                  {(startDate || endDate) && (
+                    <button 
+                      className="clear-date-filter"
+                      onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                        setSelectedDate("");
+                      }}
+                    >
+                      Clear Dates
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
           {techTickets.length > 0 ? (
@@ -313,27 +426,30 @@ const Technicians = () => {
                   }
                 };
 
-                // Get priority-based left border color
-                const getBorderColor = (priority) => {
-                  switch (priority?.toLowerCase()) {
-                    case "high": return "#dc2626"; // Red
-                    case "medium": return "#facc15"; // Yellow
-                    case "low": return "#16a34a"; // Green
-                    default: return "#16a34a"; // Default to green
-                  }
-                };
+                // Check if ticket is resolved
+                const isResolved = ticket.status === "Resolved";
 
                 return (
                   <div 
                     key={ticket.id} 
                     className="ticket-card tech-ticket-card"
-                    style={{ borderLeft: `4px solid ${getBorderColor(ticket.priority)}` }}
+                    style={{ 
+                      borderLeft: `4px solid ${isResolved ? "#10b981" : getPriorityColor(ticket.priority)}`
+                    }}
                   >
                     <div className="ticket-header">
                       <div className="header-top">
                         <h3 className="ticket-number">#{ticket.ticketNumber}</h3>
-                        <div className="status-badge status-pending">
-                          <span className="status-icon">⏳</span>
+                        <div 
+                          className="status-badge"
+                          style={{ 
+                            backgroundColor: isResolved ? "#10b981" : getStatusColor(ticket.status || 'Pending'),
+                            color: 'white'
+                          }}
+                        >
+                          <span className="status-icon">
+                            {isResolved ? "✅" : getStatusIcon(ticket.status || 'Pending')}
+                          </span>
                           {ticket.status || 'Pending'}
                         </div>
                       </div>
@@ -349,14 +465,16 @@ const Technicians = () => {
                           <span className="info-label">PRODUCT</span>
                           <span className="info-value">{ticket.productName}</span>
                         </div>
-                        <div className="info-row">
-                          <span className="info-label">SERIAL NO</span>
-                          <span className="info-value">{ticket.serialNumber || '-'}</span>
-                        </div>
                         {ticket.issueType && (
                           <div className="info-row">
                             <span className="info-label">ISSUE TYPE</span>
                             <span className="info-value">{ticket.issueType}</span>
+                          </div>
+                        )}
+                        {ticket.createdBy && (
+                          <div className="info-row">
+                            <span className="info-label">CREATED BY</span>
+                            <span className="info-value admin-name">👤 {ticket.createdBy}</span>
                           </div>
                         )}
                         {(ticket.category === "Third Party" || ticket.category === "In Store") && ticket.serviceAmount && (
@@ -391,19 +509,36 @@ const Technicians = () => {
                           <div 
                             className="priority-tag"
                             style={{ 
-                              backgroundColor: getPriorityColor(ticket.priority),
+                              backgroundColor: isResolved ? "#10b981" : getPriorityColor(ticket.priority),
                               color: 'white'
                             }}
                           >
-                            {ticket.priority?.toUpperCase() || 'MEDIUM'}
+                            {isResolved ? "COMPLETED" : (ticket.priority?.toUpperCase() || 'MEDIUM')}
                           </div>
-                          <span className="meta-date">
-                            {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString('en-GB', { 
-                              day: '2-digit', 
-                              month: '2-digit', 
-                              year: 'numeric' 
-                            }) : 'N/A'}
-                          </span>
+                          <div className="meta-dates">
+                            <div className="start-date">
+                              <span className="date-label">Start:</span>
+                              <span className="date-value">
+                                {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString('en-GB', { 
+                                  day: '2-digit', 
+                                  month: '2-digit', 
+                                  year: 'numeric' 
+                                }) : 'N/A'}
+                              </span>
+                            </div>
+                            {ticket.endDate && (
+                              <div className="end-date">
+                                <span className="date-label">End:</span>
+                                <span className="date-value">
+                                  {new Date(ticket.endDate).toLocaleDateString('en-GB', { 
+                                    day: '2-digit', 
+                                    month: '2-digit', 
+                                    year: 'numeric' 
+                                  })}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         <div className="assigned-info">
                           <span className="meta-label">ASSIGNED TO</span>
@@ -460,7 +595,7 @@ const Technicians = () => {
             <span className="search-icon">🔍</span>
             <input
               type="text"
-              placeholder="Search by name, phone, email, skills, or address..."
+              placeholder="Search by name, phone, skills, or address..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
@@ -515,11 +650,7 @@ const Technicians = () => {
                             </div>
                           </div>
                         </td>
-                        <td>
-                          {tech.phone || "N/A"}
-                          <br />
-                          {tech.email || "N/A"}
-                        </td>
+                        <td>{tech.phone || "N/A"}</td>
                         <td>{tech.address || "No address provided"}</td>
                         <td>{Array.isArray(tech.skills) ? tech.skills.join(", ") : (tech.skills || "No skills listed")}</td>
                         <td onClick={(e) => e.stopPropagation()}>
@@ -585,13 +716,13 @@ const Technicians = () => {
                       <div className="card-section">
                         <h4>Contact Information</h4>
                         <p>📞 {tech.phone || "No phone"}</p>
-                        <p>📧 {tech.email || "No email"}</p>
                       </div>
 
                       <div className="card-section">
                         <h4>Address</h4>
                         <p>{tech.address || "No address provided"}</p>
                       </div>
+
                     </div>
                   </div>
                 ))}
@@ -628,13 +759,6 @@ const Technicians = () => {
         type="danger"
       />
 
-      {showLogin && loginTech && (
-        <TechnicianLogin
-          technician={loginTech}
-          onLoginSuccess={handleLoginSuccess}
-          onCancel={handleLoginCancel}
-        />
-      )}
     </div>
   );
 };

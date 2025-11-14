@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ref, onValue, push, update, remove } from 'firebase/database';
-import { database } from '../firebase/config';
+import { onSnapshot, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getCollectionRef, getDocRef } from '../firebase/config';
 import AddProduct from './AddProduct';
 import Notification from './Notification';
 import useNotification from '../hooks/useNotification';
@@ -18,27 +18,20 @@ const ProductManagement = () => {
   const { notification, showNotification, hideNotification } = useNotification();
   const [formData, setFormData] = useState({
     name: '',
-    price: '',
     category: '',
     description: '',
-    stock: '',
     status: 'active',
     createdAt: ''
   });
 
   useEffect(() => {
-    const productsRef = ref(database, 'products');
-    onValue(productsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const productsArray = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setProducts(productsArray);
-      } else {
-        setProducts([]);
-      }
+    const productsRef = getCollectionRef('products');
+    const unsubscribe = onSnapshot(productsRef, (snapshot) => {
+      const productsArray = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProducts(productsArray);
     });
 
     const handleResize = () => {
@@ -49,6 +42,7 @@ const ProductManagement = () => {
     
     return () => {
       window.removeEventListener('resize', handleResize);
+      unsubscribe();
     };
   }, []);
 
@@ -64,14 +58,12 @@ const ProductManagement = () => {
     e.preventDefault();
     const productData = {
       ...formData,
-      price: parseFloat(formData.price),
-      stock: parseInt(formData.stock),
       createdAt: editingProduct ? formData.createdAt : new Date().toISOString()
     };
 
     if (editingProduct) {
-      const productRef = ref(database, `products/${editingProduct.id}`);
-      update(productRef, productData)
+      const productRef = getDocRef('products', editingProduct.id);
+      updateDoc(productRef, productData)
         .then(() => {
           showNotification('Product updated successfully!', 'success');
           resetForm();
@@ -81,8 +73,8 @@ const ProductManagement = () => {
           showNotification('Error updating product. Please try again.', 'error');
         });
     } else {
-      const productsRef = ref(database, 'products');
-      push(productsRef, productData)
+      const productsRef = getCollectionRef('products');
+      addDoc(productsRef, productData)
         .then(() => {
           showNotification('Product added successfully!', 'success');
           resetForm();
@@ -98,10 +90,8 @@ const ProductManagement = () => {
     setEditingProduct(product);
     setFormData({
       name: product.name || '',
-      price: product.price || '',
       category: product.category || '',
       description: product.description || '',
-      stock: product.stock || '',
       status: product.status || 'active',
       createdAt: product.createdAt || ''
     });
@@ -110,8 +100,8 @@ const ProductManagement = () => {
 
   const handleDelete = (productId) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
-      const productRef = ref(database, `products/${productId}`);
-      remove(productRef)
+      const productRef = getDocRef('products', productId);
+      deleteDoc(productRef)
         .then(() => {
           showNotification('Product deleted successfully!', 'success');
         })
@@ -123,8 +113,8 @@ const ProductManagement = () => {
   };
 
   const updateProductStatus = (productId, status) => {
-    const productRef = ref(database, `products/${productId}`);
-    update(productRef, { status })
+    const productRef = getDocRef('products', productId);
+    updateDoc(productRef, { status })
       .then(() => {
         showNotification('Product status updated successfully!', 'success');
       })
@@ -137,10 +127,8 @@ const ProductManagement = () => {
   const resetForm = () => {
     setFormData({
       name: '',
-      price: '',
       category: '',
       description: '',
-      stock: '',
       status: 'active',
       createdAt: ''
     });
@@ -157,12 +145,6 @@ const ProductManagement = () => {
     }
   };
 
-  const getStockClass = (stock) => {
-    const stockValue = parseInt(stock);
-    if (stockValue === 0) return 'stock-out';
-    if (stockValue < 10) return 'stock-low';
-    return 'stock-ok';
-  };
 
   const handleSort = (field) => {
     if (sortBy === field) {
@@ -196,11 +178,6 @@ const ProductManagement = () => {
     .sort((a, b) => {
       let aValue = a[sortBy];
       let bValue = b[sortBy];
-
-      if (sortBy === 'price' || sortBy === 'stock') {
-        aValue = parseFloat(aValue);
-        bValue = parseFloat(bValue);
-      }
 
       if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
@@ -248,8 +225,6 @@ const ProductManagement = () => {
               className="sort-select"
             >
               <option value="name">Name</option>
-              <option value="price">Price</option>
-              <option value="stock">Stock</option>
               <option value="createdAt">Date Added</option>
             </select>
             <button 
@@ -283,19 +258,6 @@ const ProductManagement = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Price ($)</label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    step="0.01"
-                    min="0"
-                    required
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="form-group">
                   <label>Category</label>
                   <input
                     type="text"
@@ -304,18 +266,6 @@ const ProductManagement = () => {
                     onChange={handleInputChange}
                     required
                     placeholder="e.g., Electronics, Clothing"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Stock Quantity</label>
-                  <input
-                    type="number"
-                    name="stock"
-                    value={formData.stock}
-                    onChange={handleInputChange}
-                    min="0"
-                    required
-                    placeholder="0"
                   />
                 </div>
                 <div className="form-group">
@@ -364,9 +314,7 @@ const ProductManagement = () => {
                   <thead>
                     <tr>
                       <th>Product</th>
-                      <th>Price</th>
                       <th>Category</th>
-                      <th>Stock</th>
                       <th>Status</th>
                       <th>Date Added</th>
                       <th>Actions</th>
@@ -385,15 +333,7 @@ const ProductManagement = () => {
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <div className="product-price">${parseFloat(product.price).toFixed(2)}</div>
-                        </td>
                         <td>{product.category}</td>
-                        <td>
-                          <span className={`stock-badge ${getStockClass(product.stock)}`}>
-                            {product.stock} in stock
-                          </span>
-                        </td>
                         <td>
                           <div className="status-cell">
                             <span className={`status-badge ${getStatusClass(product.status)}`}>{product.status}</span>
@@ -442,9 +382,7 @@ const ProductManagement = () => {
                       <div className="card-section">
                         <h4>Product Information</h4>
                         <div className="product-info-details">
-                          <div className="info-item">💰 ${parseFloat(product.price).toFixed(2)}</div>
                           <div className="info-item">📂 {product.category}</div>
-                          <div className="info-item">📦 {product.stock} in stock</div>
                         </div>
                       </div>
                       

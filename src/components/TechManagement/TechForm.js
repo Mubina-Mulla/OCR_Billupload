@@ -1,14 +1,13 @@
 // src/components/TechManagement/TechForm.jsx
 import React, { useState, useEffect } from "react";
-import { db } from "../../firebase/config";
-import { ref, push, update } from "firebase/database";
+import { db, getCollectionRef, getDocRef } from "../../firebase/config";
+import { addDoc, updateDoc } from "firebase/firestore";
 import Notification from '../Notification';
 import useNotification from '../../hooks/useNotification';
 import "./TechForm.css";
 
 function TechForm({ tech, onClose, onTechAdded, onBack, fullPage = false }) {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [skills, setSkills] = useState("");
@@ -25,15 +24,9 @@ function TechForm({ tech, onClose, onTechAdded, onBack, fullPage = false }) {
     setPhone(limitedDigits);
   };
 
-  // Handle email input - convert to lowercase
-  const handleEmailChange = (value) => {
-    setEmail(value.toLowerCase());
-  };
-
   useEffect(() => {
     if (tech) {
       setName(tech.name || "");
-      setEmail(tech.email || "");
       setPhone(tech.phone || "");
       setAddress(tech.address || "");
       setSkills(tech.skills?.join(", ") || "");
@@ -45,13 +38,6 @@ function TechForm({ tech, onClose, onTechAdded, onBack, fullPage = false }) {
   const validateForm = () => {
     const newErrors = {};
     if (!name.trim()) newErrors.name = "Name is required";
-    
-    // Email validation
-    if (!email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
     
     // Phone validation (exactly 10 digits)
     if (!phone.trim()) {
@@ -83,7 +69,6 @@ function TechForm({ tech, onClose, onTechAdded, onBack, fullPage = false }) {
     setIsSubmitting(true);
     const techData = {
       name: name.trim(),
-      email: email.trim(),
       phone: phone.trim(),
       skills: skills.split(",").map((s) => s.trim()).filter(Boolean),
       status: "Available",
@@ -95,10 +80,12 @@ function TechForm({ tech, onClose, onTechAdded, onBack, fullPage = false }) {
 
     try {
       if (tech) {
-        await update(ref(db, `technicians/${tech.id}`), techData);
+        const techRef = getDocRef("technicians", tech.id);
+        await updateDoc(techRef, techData);
         showNotification('Technician updated successfully!', 'success');
       } else {
-        await push(ref(db, "technicians"), techData);
+        const techRef = getCollectionRef("technicians");
+        await addDoc(techRef, techData);
         showNotification('Technician added successfully!', 'success');
       }
       
@@ -146,21 +133,6 @@ function TechForm({ tech, onClose, onTechAdded, onBack, fullPage = false }) {
                     required
                   />
                   {errors.name && <span className="error-text">{errors.name}</span>}
-                </div>
-
-                <div className="form-group">
-                  <label>Email Address *</label>
-                  <input 
-                    type="email"
-                    value={email} 
-                    onChange={(e) => handleEmailChange(e.target.value)} 
-                    placeholder="example@gmail.com"
-                    required
-                  />
-                  <small style={{color: '#6b7280', display: 'block', marginTop: '0.25rem'}}>
-                    Email will be converted to lowercase
-                  </small>
-                  {errors.email && <span className="error-text">{errors.email}</span>}
                 </div>
 
                 <div className="form-group">
@@ -267,18 +239,6 @@ function TechForm({ tech, onClose, onTechAdded, onBack, fullPage = false }) {
 
           <label>Address</label>
           <input value={address} onChange={(e) => setAddress(e.target.value)} />
-
-          <label>Email Address *</label>
-          <input 
-            type="email"
-            value={email} 
-            onChange={(e) => handleEmailChange(e.target.value)}
-            placeholder="example@gmail.com"
-          />
-          <small style={{color: '#6b7280', display: 'block', marginTop: '0.25rem'}}>
-            Email will be converted to lowercase
-          </small>
-          {errors.email && <span className="error-text">{errors.email}</span>}
 
           <label>Phone Number *</label>
           <input 

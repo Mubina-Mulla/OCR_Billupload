@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ref, push, update } from 'firebase/database';
-import { database } from '../firebase/config';
+import { addDoc, updateDoc } from 'firebase/firestore';
+import { getCollectionRef, getDocRef } from '../firebase/config';
 import AddTicket from './AddTicket';
 import Notification from './Notification';
 import useNotification from '../hooks/useNotification';
@@ -10,10 +10,7 @@ const AddProduct = ({ onBack, onProductAdded, customer, editMode = false, produc
   const [formData, setFormData] = useState({
     companyName: '',
     serialNumber: '',
-    name: '',
-    stock: '',
-    price: '',
-    amount: ''
+    name: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,47 +25,22 @@ const AddProduct = ({ onBack, onProductAdded, customer, editMode = false, produc
       setFormData({
         companyName: productData.companyName || '',
         serialNumber: productData.serialNumber || productData.serialNo || '',
-        name: productData.name || productData.productName || '',
-        stock: productData.stock || productData.quantity || productData.qty || '',
-        price: productData.price || productData.rate || '',
-        amount: productData.amount || productData.total || ''
+        name: productData.name || productData.productName || ''
       });
     }
   }, [editMode, productData]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-
-    let newForm = { ...formData, [name]: value };
-    
-    // Auto-calculate amount when price or stock changes
-    if (name === 'price' || name === 'stock') {
-      const price = parseFloat(newForm.price || 0);
-      const stock = parseInt(newForm.stock || 0);
-      newForm.amount = (price * stock).toFixed(2);
-    }
-    
-    setFormData(newForm);
+    setFormData({ ...formData, [name]: value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Validate required fields
-    if (!formData.companyName || !formData.serialNumber || !formData.name || !formData.stock || !formData.price) {
+    if (!formData.companyName || !formData.serialNumber || !formData.name) {
       showNotification('Please fill in all required fields', 'error');
-      return;
-    }
-
-    // Validate stock quantity is not 0
-    if (parseInt(formData.stock) === 0) {
-      showNotification('Stock quantity cannot be 0. Please enter a valid quantity.', 'warning');
-      return;
-    }
-
-    // Validate price is not 0
-    if (parseFloat(formData.price) === 0) {
-      showNotification('Price cannot be 0. Please enter a valid price.', 'warning');
       return;
     }
 
@@ -79,9 +51,6 @@ const AddProduct = ({ onBack, onProductAdded, customer, editMode = false, produc
         companyName: formData.companyName,
         serialNumber: formData.serialNumber,
         name: formData.name,
-        stock: parseInt(formData.stock || 0),
-        price: parseFloat(formData.price || 0),
-        amount: parseFloat(formData.amount || 0),
         customerName: customer?.name || '',
         customerId: customer?.id || '',
         status: 'active',
@@ -99,8 +68,8 @@ const AddProduct = ({ onBack, onProductAdded, customer, editMode = false, produc
         // Check if it's a saved product (has Firebase id) or temporary product (has tempId)
         if (productData.id && !productData.tempId && productData.id !== 'undefined' && productData.id.length > 5) {
           // Update existing Firebase product
-          const productRef = ref(database, `products/${productData.id}`);
-          await update(productRef, productPayload);
+          const productRef = getDocRef('products', productData.id);
+          await updateDoc(productRef, productPayload);
           if (onProductAdded) onProductAdded({ ...productPayload, id: productData.id });
           showNotification('Product updated successfully!', 'success');
         } else {
@@ -115,9 +84,9 @@ const AddProduct = ({ onBack, onProductAdded, customer, editMode = false, produc
         }
       } else {
         // Create new product
-        const productsRef = ref(database, 'products');
-        const newProductRef = await push(productsRef, productPayload);
-        if (onProductAdded) onProductAdded({ ...productPayload, id: newProductRef.key });
+        const productsRef = getCollectionRef('products');
+        const newProductRef = await addDoc(productsRef, productPayload);
+        if (onProductAdded) onProductAdded({ ...productPayload, id: newProductRef.id });
         showNotification('Product added successfully!', 'success');
       }
 
@@ -201,42 +170,6 @@ const AddProduct = ({ onBack, onProductAdded, customer, editMode = false, produc
                   required
                   placeholder="Enter product name"
                 />
-              </div>
-              <div className="form-group">
-                <label>Stock Quantity *</label>
-                <input
-                  type="number"
-                  name="stock"
-                  value={formData.stock}
-                  onChange={handleInputChange}
-                  min="0"
-                  required
-                  placeholder="Enter quantity"
-                />
-              </div>
-              <div className="form-group">
-                <label>Price (₹) *</label>
-                <input
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                  step="0.01"
-                  min="0"
-                  required
-                  placeholder="Enter price"
-                />
-              </div>
-              <div className="form-group">
-                <label>Amount (₹)</label>
-                <input
-                  type="number"
-                  value={formData.amount || 0}
-                  readOnly
-                  className="readonly-input"
-                  placeholder="Auto-calculated"
-                />
-                <small>(Price × Stock)</small>
               </div>
             </div>
 

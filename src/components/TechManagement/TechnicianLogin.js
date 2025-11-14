@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "./TechnicianLogin.css";
 
-const TechnicianLogin = ({ technician, onLoginSuccess, onCancel }) => {
+const TechnicianLogin = ({ technicians, onLoginSuccess, onCancel }) => {
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -10,9 +10,13 @@ const TechnicianLogin = ({ technician, onLoginSuccess, onCancel }) => {
     e.preventDefault();
     setError("");
 
-    // Validate credentials
-    if (userId === technician.userId && password === technician.password) {
-      onLoginSuccess();
+    // Find technician with matching credentials
+    const authenticatedTech = technicians.find(
+      (tech) => tech.userId === userId && tech.password === password
+    );
+
+    if (authenticatedTech) {
+      onLoginSuccess(authenticatedTech);
     } else {
       setError("Invalid User ID or Password");
     }
@@ -27,11 +31,6 @@ const TechnicianLogin = ({ technician, onLoginSuccess, onCancel }) => {
         </div>
 
         <div className="login-body">
-          <div className="tech-info">
-            <h3>{technician.name}</h3>
-            <p>{technician.email}</p>
-          </div>
-
           <form onSubmit={handleSubmit} className="login-form">
             {error && <div className="error-message">{error}</div>}
 

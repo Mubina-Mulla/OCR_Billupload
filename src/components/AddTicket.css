@@ -50,6 +50,47 @@
   font-size: 1.2rem;
 }
 
+/* Created By Field Styling */
+.created-by-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.admin-icon {
+  font-size: 16px;
+  color: #7c3aed;
+  position: absolute;
+  left: 8px;
+  z-index: 1;
+}
+
+.admin-name-input {
+  padding-left: 32px !important;
+  background-color: #f3e8ff !important;
+  color: #7c3aed !important;
+  font-weight: 600 !important;
+  border: 2px solid #e9d5ff !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  cursor: not-allowed;
+  transition: all 0.2s ease;
+}
+
+.admin-name-input:focus {
+  outline: none;
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1) !important;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+  display: block;
+}
+
 /* Header Styles */
 .add-ticket-header {
   margin-bottom: 2rem;

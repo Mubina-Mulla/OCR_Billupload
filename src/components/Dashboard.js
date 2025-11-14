@@ -6,12 +6,14 @@ const Dashboard = () => {
   const [filterCategory, setFilterCategory] = useState(null);
   const [activeFilter, setActiveFilter] = useState(null);
   const [showTickets, setShowTickets] = useState(true); // Show tickets by default
+  const excludeResolved = true; // Dashboard should not show resolved tickets
 
   const sections = [
     { name: "demo", label: "Demo" },
     { name: "service", label: "Service" },
     { name: "third party", label: "Third Party Tech" },
     { name: "in store", label: "In Store" },
+    { name: "in stock", label: "In Stock" },
   ];
 
   const handleCategoryClick = (categoryName) => {
@@ -59,7 +61,7 @@ const Dashboard = () => {
                 {sections.find(s => s.name === filterCategory)?.label} Tickets
               </h2>
             </div>
-            <Tickets filterCategory={filterCategory} />
+            <Tickets filterCategory={filterCategory} excludeResolved={excludeResolved} />
           </>
         ) : (
           <>
@@ -68,7 +70,7 @@ const Dashboard = () => {
                 All Tickets
               </h2>
             </div>
-            <Tickets filterCategory={null} />
+            <Tickets filterCategory={null} excludeResolved={excludeResolved} />
           </>
         )}
       </div>

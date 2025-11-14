@@ -1560,6 +1560,16 @@ function parseNavaratnaBillTable(text, lines) {
   
   console.log(`📋 Processing lines ${tableStartIndex} to ${tableEndIndex}`);
   
+  // Show the actual lines being processed for debugging
+  console.log('📋 Lines being processed:');
+  for (let debugI = tableStartIndex; debugI < Math.min(tableStartIndex + 15, tableEndIndex); debugI++) {
+    console.log(`  Line ${debugI}: "${lines[debugI]}"`);
+    // Highlight lines that contain our target products
+    if (lines[debugI] && (lines[debugI].toLowerCase().includes('racold') || lines[debugI].toLowerCase().includes('phillips') || lines[debugI].toLowerCase().includes('philips'))) {
+      console.log(`  ⭐ TARGET PRODUCT LINE FOUND: "${lines[debugI]}"`);
+    }
+  }
+  
   // Extract products from table rows
   console.log(`📋 Scanning ${tableEndIndex - tableStartIndex} lines for products...`);
   
@@ -1583,8 +1593,23 @@ function parseNavaratnaBillTable(text, lines) {
     // Check if line starts with a number (serial number 1, 2, 3, etc.)
     const startsWithNumber = /^[1-9]\d?\s/.test(line);
     
-    // Check if line contains known brand names
-    const hasBrand = /(lg|samsung|whirlpool|liebherr|atomberg|apple|sony|dell|hp|bajaj|havells|godrej|voltas|panasonic|philips|bosch|haier|mi|xiaomi|lenovo|daikin|onida|videocon|ifb|realme|vivo|oppo|oneplus|orient|usha|crompton)/i.test(line);
+    // Check if line contains known brand names - Enhanced with Racold and other missing brands
+    // Also handle common OCR errors for Racold and Whirlpool, and multi-word brands like Eureka Forbes
+    const hasBrand = /(racold|racoid|racald|whirlpool|whipool|eureka\s+forbes|eureka|lg|samsung|liebherr|atomberg|apple|sony|dell|hp|bajaj|havells|godrej|voltas|panasonic|philips|phillips|bosch|haier|mi|xiaomi|lenovo|daikin|onida|videocon|ifb|realme|vivo|oppo|oneplus|orient|usha|crompton|prestige|pigeon|butterfly|preethi|sumeet|maharaja|kent|aquaguard|forbes|ao|smith|v-guard)/i.test(line);
+    
+    // Debug: Check specifically for Racold, Whirlpool, and Eureka Forbes
+    if (line.toLowerCase().includes('racold')) {
+      console.log('🎯 RACOLD DETECTED in line:', line);
+      console.log('🎯 hasBrand result:', hasBrand);
+    }
+    if (line.toLowerCase().includes('whir') || line.toLowerCase().includes('whip')) {
+      console.log('🎯 WHIRLPOOL DETECTED in line:', line);
+      console.log('🎯 hasBrand result:', hasBrand);
+    }
+    if (line.toLowerCase().includes('eureka')) {
+      console.log('🎯 EUREKA FORBES DETECTED in line:', line);
+      console.log('🎯 hasBrand result:', hasBrand);
+    }
     
     // Check if line has price pattern (numbers with decimals)
     const hasPrice = /\d+[,.]?\d*\.\d{2}/.test(line);
@@ -1618,24 +1643,99 @@ function parseNavaratnaBillTable(text, lines) {
     const srMatch = line.match(/^(\d+)\s/);
     const srNo = srMatch ? srMatch[1] : String(products.length + 1);
     
-    // Extract company/brand name
-    const brandMatch = line.match(/\b(lg|samsung|whirlpool|liebherr|atomberg|apple|sony|dell|hp|lenovo|bajaj|havells|godrej|voltas|daikin|panasonic|philips|bosch|haier|onida|videocon|ifb|mi|xiaomi|realme|vivo|oppo|oneplus|orient|usha|crompton)\b/i);
-    const companyName = brandMatch ? brandMatch[1].charAt(0).toUpperCase() + brandMatch[1].slice(1).toLowerCase() : 'Unknown';
+    // For Navaratna Distributors: FIRST WORD is ALWAYS the company name
+    // Extract the first word after serial number as company name
+    let companyName = 'Unknown';
+    let restOfLine = line;
     
-    // Extract product name (text between brand and numbers)
+    // Remove serial number from beginning if present
+    if (srMatch) {
+      restOfLine = line.substring(srMatch[0].length).trim();
+    }
+    
+    // Extract company name - handle both single and multi-word company names
+    let companyMatch = null;
+    
+    // First check for two-word company names like "Eureka Forbes"
+    const twoWordMatch = restOfLine.match(/^(Eureka\s+Forbes|Blue\s+Star|AO\s+Smith|LG\s+Electronics)/i);
+    if (twoWordMatch) {
+      companyMatch = twoWordMatch;
+      companyName = twoWordMatch[1].split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ');
+    } else {
+      // Then check for single-word company names
+      const firstWordMatch = restOfLine.match(/^([A-Za-z]+)/);
+      if (firstWordMatch) {
+        companyMatch = firstWordMatch;
+        const firstWord = firstWordMatch[1];
+        // Normalize common brand names
+        if (firstWord.toLowerCase().includes('rac')) {
+          companyName = 'Racold';
+        } else if (firstWord.toLowerCase().includes('whir') || firstWord.toLowerCase().includes('whip')) {
+          companyName = 'Whirlpool';
+        } else if (firstWord.toLowerCase().includes('phil')) {
+          companyName = 'Phillips';
+        } else {
+          // For any other first word, capitalize it as company name
+          companyName = firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+        }
+      }
+    }
+    
+    // Debug: Log company name extraction for Navaratna format
+    console.log('🎯 PROCESSING LINE:', line);
+    console.log('🎯 REST OF LINE after serial:', restOfLine);
+    console.log('🎯 COMPANY MATCH:', companyMatch);
+    console.log('🎯 COMPANY NAME:', companyName);
+    
+    // Additional debug for the specific products we expect
+    if (line.toLowerCase().includes('racold') || line.toLowerCase().includes('phillips') || line.toLowerCase().includes('philips')) {
+      console.log('🎯 TARGET PRODUCT LINE DETECTED:', line);
+      console.log('🎯 Serial match:', srMatch);
+      console.log('🎯 Rest after serial removal:', restOfLine);
+      console.log('🎯 Two word match:', twoWordMatch);
+      console.log('🎯 Single word match result:', restOfLine.match(/^([A-Za-z]+)/));
+    }
+    
+    if (line.toLowerCase().includes('racold') || line.toLowerCase().includes('whir') || line.toLowerCase().includes('whip') || line.toLowerCase().includes('phil') || line.toLowerCase().includes('eureka')) {
+      console.log('🎯 SPECIAL BRAND DETECTED - Company match:', companyMatch ? companyMatch[0] : 'none');
+      console.log('🎯 SPECIAL BRAND DETECTED - Company name:', companyName);
+    }
+    
+    // Extract product name - For Navaratna format: everything AFTER the first word (company name)
     let productName = '';
-    if (brandMatch) {
-      const brandIndex = line.toLowerCase().indexOf(brandMatch[1].toLowerCase());
-      const afterBrand = line.substring(brandIndex + brandMatch[1].length).trim();
+    
+    if (companyMatch && restOfLine) {
+      // Remove the company name (single or multi-word) to get product name
+      const afterCompanyName = restOfLine.substring(companyMatch[0].length).trim();
+      console.log('🎯 AFTER COMPANY NAME:', afterCompanyName);
       
-      // Extract until we hit a 4+ digit number or "No." pattern
-      const nameMatch = afterBrand.match(/^([A-Za-z0-9\s\-\/\(\)\'\.]+?)(?:\s+\d{4,}|\s+\d+\s*No\.?)/i);
+      // Extract product name until HSN code (6-8 digits) or amount pattern
+      // Examples: "Gas Geyser ECO 6L NF" or "Mixer HL7756 750W 3J"
+      let nameMatch = afterCompanyName.match(/^([A-Za-z0-9\s\-\/\(\)\'\.]+?)(?:\s+\d{6,8}|\s+\d+\s*No\.?|\s+\d+%)/i);
+      
       if (nameMatch) {
         productName = nameMatch[1].trim();
+        console.log('🎯 PRODUCT NAME (Pattern 1):', productName);
       } else {
-        // Try to get first few words
-        const words = afterBrand.split(/\s+/);
-        productName = words.slice(0, Math.min(5, words.length)).join(' ');
+        // If no HSN found, try to extract until price pattern (numbers with comma/decimal)
+        nameMatch = afterCompanyName.match(/^([A-Za-z0-9\s\-\/\(\)\'\.]+?)(?:\s+[\d,]+\.\d{2})/i);
+        if (nameMatch) {
+          productName = nameMatch[1].trim();
+          console.log('🎯 PRODUCT NAME (Pattern 2):', productName);
+        } else {
+          // Fallback: take everything except the last few numeric parts
+          const words = afterCompanyName.split(/\s+/);
+          // Remove trailing numbers and percentages
+          const cleanWords = words.filter((word, index) => {
+            // Keep word if it's not a pure number or percentage at the end
+            if (index < words.length - 3) return true; // Keep early words
+            return !/^\d+$/.test(word) && !/^\d+%$/.test(word) && !/^[\d,]+\.\d{2}$/.test(word);
+          });
+          productName = cleanWords.join(' ');
+          console.log('🎯 PRODUCT NAME (Fallback):', productName);
+        }
       }
     }
     
@@ -1646,45 +1746,78 @@ function parseNavaratnaBillTable(text, lines) {
     const hsnMatch = line.match(/\b(\d{6,8})\b/);
     const hsn = hsnMatch ? hsnMatch[1] : '';
     
-    // Extract serial number (4-5 digit number in parentheses or standalone)
-    const serialMatch = line.match(/(\d{4,5}(?:\(\d+\))?)/);
-    const serialNumber = serialMatch ? serialMatch[1] : '';
+    // Extract serial number - Enhanced for Navaratna format
+    // Look for patterns like "151013", "85287219" (HSN codes), or numbers after dash
+    let serialNumber = '';
+    
+    // First try to find HSN code as serial number
+    if (hsn) {
+      serialNumber = hsn;
+    } else {
+      // Look for number after dash (like "- 151013")
+      const dashSerialMatch = line.match(/\-\s*(\d{4,8})/);
+      if (dashSerialMatch) {
+        serialNumber = dashSerialMatch[1];
+      } else {
+        // Look for standalone 4-8 digit numbers
+        const standaloneMatch = line.match(/\b(\d{4,8})\b/);
+        if (standaloneMatch) {
+          serialNumber = standaloneMatch[1];
+        } else {
+          // Fallback to sr number
+          serialNumber = `SN${srNo.padStart(3, '0')}`;
+        }
+      }
+    }
     
     // Extract quantity (look for "1 No", "1 No.", "2 Nos", etc.)
     const qtyMatch = line.match(/(\d+)\s*(?:No\.?|Nos\.?|Pcs?\.?|Units?\.?)\b/i);
     const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
     
-    // Extract price and amount (last two decimal numbers)
+    // Extract price and amount - Enhanced for Navaratna format
     const pricePattern = /(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g;
     const allNumbers = line.match(pricePattern);
     
     let price = 0;
     let amount = 0;
     
-    if (allNumbers && allNumbers.length >= 2) {
-      // Convert to numbers and filter out HSN codes
+    if (allNumbers && allNumbers.length >= 1) {
+      // Convert to numbers and filter out HSN codes and serial numbers
       const nums = allNumbers
         .map(n => parseFloat(n.replace(/,/g, '')))
-        .filter(n => n > 0 && n < 1000000); // Filter out very large numbers (HSN codes)
+        .filter(n => n > 0 && n < 1000000 && n !== parseFloat(hsn)); // Filter out HSN codes
       
       if (nums.length >= 2) {
         // Last two numbers are typically rate and amount
         price = nums[nums.length - 2];
         amount = nums[nums.length - 1];
       } else if (nums.length === 1) {
+        // If only one number, use it as both price and amount
         price = nums[0];
         amount = nums[0];
       }
     }
     
+    // If no price found, try to extract from common patterns like "5,508.47" or "5,076.27"
+    if (price === 0 && amount === 0) {
+      const priceMatch = line.match(/(\d{1,2},\d{3}\.\d{2})/);
+      if (priceMatch) {
+        const extractedPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
+        price = extractedPrice;
+        amount = extractedPrice;
+      }
+    }
+    
     // Validate we have minimum required data
-    if (!productName && !companyName) {
-      console.log(`⏭️ Skipping line - no product name or company`);
+    if (!productName && companyName === 'Unknown') {
+      console.log(`⏭️ Skipping line - no product name and no company`);
       continue;
     }
     
-    if (price === 0 && amount === 0) {
-      console.log(`⏭️ Skipping line - no price data`);
+    // For Navaratna bills, we should accept products even without price data
+    // since the price might be in a different format or location
+    if (price === 0 && amount === 0 && !hasHSN) {
+      console.log(`⏭️ Skipping line - no price data and no HSN code`);
       continue;
     }
     

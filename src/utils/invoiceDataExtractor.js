@@ -18,10 +18,12 @@ class InvoiceDataExtractor {
       date: /(?:date)[\s:]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/gi
     };
 
-    // Common company names for better extraction
+    // Common company names for better extraction - Enhanced with Racold and others
     this.companyNames = [
-      'whirlpool', 'lg', 'samsung', 'godrej', 'haier', 'voltas', 'blue star',
-      'carrier', 'daikin', 'hitachi', 'panasonic', 'videocon', 'ifb', 'bosch'
+      'racold', 'whirlpool', 'lg', 'samsung', 'godrej', 'haier', 'voltas', 'blue star',
+      'carrier', 'daikin', 'hitachi', 'panasonic', 'philips', 'phillips', 'videocon', 'ifb', 'bosch',
+      'bajaj', 'havells', 'crompton', 'orient', 'usha', 'prestige', 'pigeon', 'butterfly',
+      'preethi', 'sumeet', 'maharaja', 'kent', 'aquaguard', 'eureka', 'forbes', 'ao', 'smith', 'v-guard'
     ];
 
     // Common product keywords

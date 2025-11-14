@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ref, push, update } from 'firebase/database';
-import { database } from '../firebase/config';
+import { addDoc, updateDoc } from 'firebase/firestore';
+import { getCollectionRef, getDocRef } from '../firebase/config';
 import Notification from './Notification';
 import useNotification from '../hooks/useNotification';
 import './AddService.css';
@@ -59,11 +59,13 @@ const AddService = ({ onBack, onServiceAddedOrUpdated, editingService }) => {
 
       if (editingService) {
         // Update existing service
-        await update(ref(database, `services/${editingService.id}`), serviceData);
+        const serviceRef = getDocRef('services', editingService.id);
+        await updateDoc(serviceRef, serviceData);
         showNotification('Service updated successfully!', 'success');
       } else {
         // Add new service
-        await push(ref(database, 'services'), serviceData);
+        const servicesRef = getCollectionRef('services');
+        await addDoc(servicesRef, serviceData);
         showNotification('Service added successfully!', 'success');
       }
 

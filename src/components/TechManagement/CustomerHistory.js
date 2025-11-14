@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { db } from "../../firebase/config";
-import { ref, push, set } from "firebase/database";
+import { db, getCollectionRef } from "../../firebase/config";
+import { addDoc } from "firebase/firestore";
 import "./CustomerHistory.css";
 
 const CustomerHistory = ({ technician, transactions, onClose, onTransactionAdded }) => {
@@ -40,10 +40,9 @@ const CustomerHistory = ({ technician, transactions, onClose, onTransactionAdded
     setIsSubmitting(true);
 
     try {
-      const transactionsRef = ref(db, "customerTransactions");
-      const newTransactionRef = push(transactionsRef);
+      const transactionsRef = getCollectionRef("customerTransactions");
       
-      await set(newTransactionRef, {
+      await addDoc(transactionsRef, {
         technicianId: technician.id,
         technicianName: technician.name,
         type: formData.type,

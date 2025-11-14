@@ -69,7 +69,7 @@
   margin-bottom: 0.5rem;
 }
 
-.sidebar-menu button {
+.sidebar-menu a {
   width: 100%;
   padding: 0.9rem 1rem;
   background: none;
@@ -82,14 +82,15 @@
   align-items: center;
   white-space: nowrap;
   overflow: hidden;
+  text-decoration: none;
 }
 
-.sidebar-menu button:hover {
+.sidebar-menu a:hover {
   background-color: rgba(255, 255, 255, 0.1);
   color: white;
 }
 
-.sidebar-menu button.active {
+.sidebar-menu a.active {
   background-color: rgba(255, 255, 255, 0.15);
   color: white;
   border-left: 4px solid #4cc9f0;

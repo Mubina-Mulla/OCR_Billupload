@@ -1,6 +1,7 @@
 // src/components/Login.js
 import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
 import './Login.css';
 
@@ -10,6 +11,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setIsMounted(true);
@@ -22,8 +24,25 @@ const Login = () => {
     setError('');
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Success - user will be redirected by your auth context
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // Check if this is the superadmin email
+      if (email.toLowerCase() === 'akshay@gmail.com') {
+        // Store superadmin data in localStorage
+        localStorage.setItem('superAdmin', JSON.stringify({
+          email: user.email,
+          uid: user.uid,
+          role: 'superadmin'
+        }));
+        
+        // Small delay to ensure localStorage is set, then redirect
+        setTimeout(() => {
+          navigate('/superadmin');
+        }, 100);
+        return; // Prevent normal auth flow
+      }
+      // For regular users, success will be handled by auth state change in App.js
     } catch (error) {
       if (isMounted) {
         setError('Invalid email or password. Please try again.');

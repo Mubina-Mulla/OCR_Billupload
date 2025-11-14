@@ -1,0 +1,193 @@
+/* Responsive styles for SuperAdmin Dashboard */
+
+/* Header actions container */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Search box styling */
+.search-box {
+  display: flex;
+  align-items: center;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  min-width: 250px;
+  flex: 1;
+}
+
+.search-icon {
+  margin-right: 0.5rem;
+  color: #6c757d;
+}
+
+.search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+/* Add User button styling */
+.btn-new-user, .btn-refresh {
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-refresh {
+  background: #28a745;
+}
+
+.btn-new-user:hover {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+.btn-refresh:hover {
+  background: #218838;
+  transform: translateY(-1px);
+}
+
+.btn-new-user:active, .btn-refresh:active {
+  transform: translateY(0);
+}
+
+/* Tablet responsive styles */
+@media (max-width: 768px) {
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  
+  .search-box {
+    min-width: 100%;
+    width: 100%;
+  }
+  
+  .btn-new-user, .btn-refresh {
+    width: 100%;
+    justify-content: center;
+    padding: 0.875rem 1rem;
+    font-size: 1rem;
+  }
+}
+
+/* Mobile responsive styles */
+@media (max-width: 480px) {
+  .header-actions {
+    gap: 0.5rem;
+  }
+  
+  .search-box {
+    padding: 0.625rem 0.875rem;
+  }
+  
+  .search-input {
+    font-size: 1rem; /* Prevent zoom on iOS */
+  }
+  
+  .btn-new-user {
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* Extra small mobile screens */
+@media (max-width: 360px) {
+  .btn-new-user {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Points display styling */
+.points-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.points-total {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #28a745;
+  background: #d4edda;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid #c3e6cb;
+}
+
+.points-tickets {
+  font-size: 0.75rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.points-average {
+  font-size: 0.7rem;
+  color: #495057;
+  font-weight: 600;
+  background: #f8f9fa;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+}
+
+.points-max {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-weight: 400;
+  margin-left: 0.2rem;
+}
+
+/* Points color coding based on performance */
+.points-total.high-performance {
+  color: #155724;
+  background: #d4edda;
+  border-color: #c3e6cb;
+}
+
+.points-total.medium-performance {
+  color: #856404;
+  background: #fff3cd;
+  border-color: #ffeaa7;
+}
+
+.points-total.low-performance {
+  color: #721c24;
+  background: #f8d7da;
+  border-color: #f5c6cb;
+}
+
+/* Responsive points display */
+@media (max-width: 768px) {
+  .points-info {
+    align-items: flex-start;
+  }
+  
+  .points-total {
+    font-size: 1rem;
+    padding: 0.2rem 0.6rem;
+  }
+  
+  .points-tickets {
+    font-size: 0.7rem;
+  }
+}

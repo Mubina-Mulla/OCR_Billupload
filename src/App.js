@@ -1,27 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
-import { ref, onValue } from 'firebase/database';
-import { database } from './firebase/config';
+import { onSnapshot } from 'firebase/firestore';
+import { getCollectionRef } from './firebase/config';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import CustomerManagement from './components/CustomerManagement';
 import ProductManagement from './components/ProductManagement';
 import ServiceCenter from './components/ServiceCenter';
 import TechManagement from './components/TechManagement/TechManagement';
+import TechnicianPortal from './components/TechManagement/TechnicianPortal';
 import Tickets from './components/Tickets';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ConnectionStatus from './components/ConnectionStatus';
+import SuperAdminDashboard from './superadmin/SuperAdminDashboard';
+import SetupTestData from './pages/SetupTestData';
 import './App.css';
-
-// Protected Route Component
-const ProtectedRoute = ({ user, children }) => {
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
-};
 
 // Main Layout Component
 const MainLayout = ({ user, handleLogout, stats }) => {
@@ -41,12 +36,9 @@ const MainLayout = ({ user, handleLogout, stats }) => {
       }
     };
 
-    window.addEventListener('resize', handleResize);
     handleResize();
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
 
@@ -88,16 +80,27 @@ const MainLayout = ({ user, handleLogout, stats }) => {
         />
         <div className="content">
           <Routes>
+            {/* Dashboard */}
             <Route path="/" element={<Dashboard stats={stats} />} />
             <Route path="/dashboard" element={<Dashboard stats={stats} />} />
+            
+            {/* Customer Management */}
             <Route path="/customers" element={<CustomerManagement />} />
             <Route path="/customers/:customerId" element={<CustomerManagement />} />
             <Route path="/customers/:customerId/products/:productId" element={<CustomerManagement />} />
+            
+            {/* Service Centers */}
             <Route path="/services" element={<ServiceCenter />} />
             <Route path="/services/:serviceId" element={<ServiceCenter />} />
+            
+            {/* Technicians */}
             <Route path="/tech" element={<TechManagement />} />
             <Route path="/tech/:techId" element={<TechManagement />} />
+            
+            {/* Tickets */}
             <Route path="/tickets" element={<Tickets />} />
+            
+            {/* Fallback */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </div>
@@ -129,55 +132,48 @@ function App() {
     });
 
     // Fetch stats data
-    const customersRef = ref(database, 'customers');
-    onValue(customersRef, (snapshot) => {
-      const data = snapshot.val();
-      setStats(prev => ({ ...prev, customers: data ? Object.keys(data).length : 0 }));
+    const customersRef = getCollectionRef('customers');
+    const unsubscribeCustomers = onSnapshot(customersRef, (snapshot) => {
+      setStats(prev => ({ ...prev, customers: snapshot.size }));
     });
 
-    const productsRef = ref(database, 'products');
-    onValue(productsRef, (snapshot) => {
-      const data = snapshot.val();
-      setStats(prev => ({ ...prev, products: data ? Object.keys(data).length : 0 }));
+    const productsRef = getCollectionRef('products');
+    const unsubscribeProducts = onSnapshot(productsRef, (snapshot) => {
+      setStats(prev => ({ ...prev, products: snapshot.size }));
     });
 
-    const servicesRef = ref(database, 'services');
-    onValue(servicesRef, (snapshot) => {
-      const data = snapshot.val();
-      setStats(prev => ({ ...prev, services: data ? Object.keys(data).length : 0 }));
+    const servicesRef = getCollectionRef('services');
+    const unsubscribeServices = onSnapshot(servicesRef, (snapshot) => {
+      setStats(prev => ({ ...prev, services: snapshot.size }));
     });
 
-    const techRef = ref(database, 'tech');
-    onValue(techRef, (snapshot) => {
-      const data = snapshot.val();
-      setStats(prev => ({ ...prev, tech: data ? Object.keys(data).length : 0 }));
+    const techRef = getCollectionRef('technicians');
+    const unsubscribeTech = onSnapshot(techRef, (snapshot) => {
+      setStats(prev => ({ ...prev, tech: snapshot.size }));
     });
 
-    const ticketsRef = ref(database, 'tickets');
-    onValue(ticketsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const tickets = Object.keys(data).length;
-        const pending = Object.values(data).filter(ticket => ticket.status === 'pending').length;
-        const completed = Object.values(data).filter(ticket => ticket.status === 'completed').length;
-        
-        setStats(prev => ({ 
-          ...prev, 
-          tickets,
-          pendingTickets: pending,
-          completedTickets: completed
-        }));
-      } else {
-        setStats(prev => ({ 
-          ...prev, 
-          tickets: 0,
-          pendingTickets: 0,
-          completedTickets: 0
-        }));
-      }
+    const ticketsRef = getCollectionRef('tickets');
+    const unsubscribeTickets = onSnapshot(ticketsRef, (snapshot) => {
+      const tickets = snapshot.size;
+      const pending = snapshot.docs.filter(doc => doc.data().status === 'pending').length;
+      const completed = snapshot.docs.filter(doc => doc.data().status === 'completed').length;
+      
+      setStats(prev => ({ 
+        ...prev, 
+        tickets,
+        pendingTickets: pending,
+        completedTickets: completed
+      }));
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeCustomers();
+      unsubscribeProducts();
+      unsubscribeServices();
+      unsubscribeTech();
+      unsubscribeTickets();
+    };
   }, [auth]);
 
   const handleLogout = () => {
@@ -207,13 +203,32 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/login" element={!user ? <Login /> : (() => {
+          // Check if user is superadmin
+          const superAdmin = localStorage.getItem("superAdmin");
+          if (superAdmin) {
+            try {
+              const adminData = JSON.parse(superAdmin);
+              if (adminData.role === "superadmin" && adminData.email.toLowerCase() === "akshay@gmail.com") {
+                return <Navigate to="/superadmin" replace />;
+              }
+            } catch (error) {
+              console.error("Error parsing superAdmin data:", error);
+            }
+          }
+          return <Navigate to="/dashboard" replace />;
+        })()} />
+        <Route path="/technician-portal" element={<TechnicianPortal />} />
+        <Route path="/setup-test-data" element={<SetupTestData />} />
+        <Route path="/superadmin" element={<SuperAdminDashboard />} />
         <Route
           path="/*"
           element={
-            <ProtectedRoute user={user}>
+            user ? (
               <MainLayout user={user} handleLogout={handleLogout} stats={stats} />
-            </ProtectedRoute>
+            ) : (
+              <Navigate to="/login" replace />
+            )
           }
         />
       </Routes>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ref, onValue, push, update, remove } from 'firebase/database';
-import { database } from '../firebase/config';
+import { onSnapshot, addDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { getCollectionRef, getDocRef, db } from '../firebase/config';
 import AddCustomer from './AddCustomer';
 import AddTicket from './AddTicket';
 import ConfirmDialog from './ConfirmDialog';
@@ -45,18 +45,13 @@ const CustomerManagement = () => {
 
   // Fetch customers from Firebase
   useEffect(() => {
-    const customersRef = ref(database, 'customers');
-    const unsubscribe = onValue(customersRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const customersArray = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setCustomers(customersArray);
-      } else {
-        setCustomers([]);
-      }
+    const customersRef = getCollectionRef('customers');
+    const unsubscribe = onSnapshot(customersRef, (snapshot) => {
+      const customersArray = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCustomers(customersArray);
     });
 
     const handleResize = () => {
@@ -73,40 +68,57 @@ const CustomerManagement = () => {
 
   // Fetch products from Firebase
   useEffect(() => {
-    const productsRef = ref(database, 'products');
-    const unsubscribe = onValue(productsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const productsArray = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setProducts(productsArray);
-      } else {
-        setProducts([]);
-      }
+    const productsRef = getCollectionRef('products');
+    const unsubscribe = onSnapshot(productsRef, (snapshot) => {
+      const productsArray = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProducts(productsArray);
     });
     
     return () => unsubscribe();
   }, []);
 
-  // Fetch tickets from Firebase
+  // Fetch tickets from all users (for CustomerManagement to see all tickets)
   useEffect(() => {
-    const ticketsRef = ref(database, 'tickets');
-    const unsubscribe = onValue(ticketsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const ticketsArray = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
-        setTickets(ticketsArray);
-      } else {
+    const fetchAllUserTickets = async () => {
+      try {
+        const usersRef = getCollectionRef('users');
+        const usersSnapshot = await getDocs(usersRef);
+        const allTickets = [];
+        
+        for (const userDoc of usersSnapshot.docs) {
+          const userTicketsRef = collection(db, 'mainData', 'Billuload', 'users', userDoc.id, 'tickets');
+          const ticketsSnapshot = await getDocs(userTicketsRef);
+          
+          ticketsSnapshot.docs.forEach(ticketDoc => {
+            allTickets.push({
+              id: ticketDoc.id,
+              userId: userDoc.id,
+              userEmail: userDoc.data().email,
+              userName: userDoc.data().name,
+              ...ticketDoc.data()
+            });
+          });
+        }
+        
+        setTickets(allTickets);
+      } catch (error) {
+        console.error('Error fetching user tickets:', error);
         setTickets([]);
       }
-    });
+    };
     
-    return () => unsubscribe();
+    // Initial fetch
+    fetchAllUserTickets();
+    
+    // Set up interval to refresh tickets every 30 seconds
+    const ticketInterval = setInterval(fetchAllUserTickets, 30000);
+    
+    return () => {
+      clearInterval(ticketInterval);
+    };
   }, []);
 
   const handleInputChange = (e) => {
@@ -122,8 +134,8 @@ const CustomerManagement = () => {
     };
 
     if (editingCustomer) {
-      const customerRef = ref(database, `customers/${editingCustomer.id}`);
-      update(customerRef, customerData)
+      const customerRef = getDocRef('customers', editingCustomer.id);
+      updateDoc(customerRef, customerData)
         .then(() => {
           showNotification('Customer updated successfully!', 'success');
           resetForm();
@@ -133,8 +145,8 @@ const CustomerManagement = () => {
           showNotification('Error updating customer. Please try again.', 'error');
         });
     } else {
-      const customersRef = ref(database, 'customers');
-      push(customersRef, customerData)
+      const customersRef = getCollectionRef('customers');
+      addDoc(customersRef, customerData)
         .then(() => {
           showNotification('Customer added successfully!', 'success');
           resetForm();
@@ -165,8 +177,8 @@ const CustomerManagement = () => {
 
   const confirmDeleteCustomer = async () => {
     try {
-      const customerRef = ref(database, `customers/${confirmDialog.id}`);
-      await remove(customerRef);
+      const customerRef = getDocRef('customers', confirmDialog.id);
+      await deleteDoc(customerRef);
       showNotification('Customer deleted successfully!', 'success');
       navigate('/customers');
     } catch (error) {
@@ -317,8 +329,7 @@ const CustomerManagement = () => {
           serialNumber: ticketProductData.product.serialNumber,
           brand: ticketProductData.product.brand,
           model: ticketProductData.product.model,
-          companyName: ticketProductData.product.companyName || ticketProductData.product.brand,
-          price: ticketProductData.product.price
+          companyName: ticketProductData.product.companyName || ticketProductData.product.brand
         }}
       />
     );
@@ -362,56 +373,72 @@ const CustomerManagement = () => {
           {productTickets.length > 0 ? (
             <div className="tickets-grid">
               {productTickets.map(ticket => (
-                <div key={ticket.id} className="ticket-card">
+                <div key={ticket.id} className={`ticket-card priority-${ticket.priority?.toLowerCase() || "medium"}`}>
                   <div className="ticket-header">
-                    <div className="ticket-title-section">
+                    <div className="header-top">
                       <h3 className="ticket-number">#{ticket.ticketNumber}</h3>
-                      <div className="ticket-status" style={{ backgroundColor: getStatusColor(ticket.status) }}>
-                        <span>{getStatusIcon(ticket.status)}</span>
+                      <div 
+                        className="status-badge" 
+                        style={{ backgroundColor: getStatusColor(ticket.status) }}
+                      >
+                        <span className="status-icon">{getStatusIcon(ticket.status)}</span>
                         {ticket.status}
                       </div>
-                    </div>
-                    <div className="ticket-meta">
-                      <span className="ticket-category">{ticket.category}</span>
-                      <span className="ticket-date">
-                        {new Date(ticket.createdAt).toLocaleDateString()}
-                      </span>
                     </div>
                   </div>
 
                   <div className="ticket-body">
-                    <div className="ticket-field">
-                      <div className="field-label">Customer</div>
-                      <div className="field-value">{ticket.customerName}</div>
-                    </div>
-                    <div className="ticket-field">
-                      <div className="field-label">Product</div>
-                      <div className="field-value">{ticket.productName}</div>
-                    </div>
-                    {ticket.serialNumber && (
-                      <div className="ticket-field">
-                        <div className="field-label">Serial Number</div>
-                        <div className="field-value">{ticket.serialNumber}</div>
+                    <div className="info-section">
+                      <div className="info-row">
+                        <span className="info-label">Customer</span>
+                        <span className="info-value">{ticket.customerName}</span>
                       </div>
-                    )}
-                    {ticket.issueType && (
-                      <div className="ticket-field">
-                        <div className="field-label">Issue Type</div>
-                        <div className="field-value">{ticket.issueType}</div>
+                      <div className="info-row">
+                        <span className="info-label">Product</span>
+                        <span className="info-value">{ticket.productName}</span>
                       </div>
-                    )}
-                  </div>
+                      {ticket.serialNumber && (
+                        <div className="info-row">
+                          <span className="info-label">Serial Number</span>
+                          <span className="info-value">{ticket.serialNumber}</span>
+                        </div>
+                      )}
+                      {ticket.issueType && (
+                        <div className="info-row">
+                          <span className="info-label">Issue Type</span>
+                          <span className="info-value">{ticket.issueType}</span>
+                        </div>
+                      )}
+                      {ticket.createdBy && (
+                        <div className="info-row">
+                          <span className="info-label">Created By</span>
+                          <span className="info-value admin-name">👤 {ticket.createdBy}</span>
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="ticket-footer">
-                    <div>
-                      <div className="field-label">Priority</div>
-                      <div className="priority-badge" style={{ backgroundColor: getPriorityColor(ticket.priority) }}>
-                        {ticket.priority}
+                    <div className="meta-section">
+                      <div className="priority-info">
+                        <span className="meta-label">Priority</span>
+                        <div 
+                          className="priority-tag"
+                          style={{ backgroundColor: getPriorityColor(ticket.priority) }}
+                        >
+                          {ticket.priority}
+                        </div>
+                        <span className="meta-date">
+                          {new Date(ticket.createdAt).toLocaleDateString('en-GB', { 
+                            day: '2-digit', 
+                            month: '2-digit', 
+                            year: 'numeric' 
+                          })}
+                        </span>
                       </div>
-                    </div>
-                    <div className="assigned-to">
-                      <div className="field-label">Assigned To</div>
-                      <div className="field-value">{ticket.subOption || ticket.assignedTo || 'Unassigned'}</div>
+                      <div className="assigned-info">
+                        <span className="meta-label">Assigned To</span>
+                        <span className="meta-value">{ticket.subOption || ticket.assignedTo || 'Unassigned'}</span>
+                        <span className="meta-category">{ticket.category}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -484,7 +511,6 @@ const CustomerManagement = () => {
                         {customerProducts.some(p => p.companyName) && <th>Company</th>}
                         {customerProducts.some(p => p.serialNumber) && <th>Serial Number</th>}
                         {customerProducts.some(p => p.brand || p.model) && <th>Brand/Model</th>}
-                        {customerProducts.some(p => p.price) && <th>Price</th>}
                         {customerProducts.some(p => p.purchaseDate) && <th>Purchase Date</th>}
                         {customerProducts.some(p => p.warrantyExpiry) && <th>Warranty</th>}
                         <th>Actions</th>
@@ -515,9 +541,6 @@ const CustomerManagement = () => {
                               {product.model && <div className="product-model">{product.model}</div>}
                               {!product.brand && !product.model && '-'}
                             </td>
-                          )}
-                          {customerProducts.some(p => p.price) && (
-                            <td style={{ cursor: 'pointer' }} onClick={() => handleProductClick(product)}>{product.price ? `₹${product.price}` : '-'}</td>
                           )}
                           {customerProducts.some(p => p.purchaseDate) && (
                             <td style={{ cursor: 'pointer' }} onClick={() => handleProductClick(product)}>
@@ -579,9 +602,6 @@ const CustomerManagement = () => {
                             <div className="product-name">{product.name || product.productName}</div>
                             <div className="product-company">{product.companyName || product.brand || 'No company'}</div>
                             <div className="product-serial">SN: {product.serialNumber || 'N/A'}</div>
-                          </div>
-                          <div className="product-price">
-                            {product.price ? `₹${product.price}` : 'N/A'}
                           </div>
                         </div>
                         
